@@ -1,0 +1,30 @@
+{
+  "name": "clockify-meets-jira",
+  "version": "0.3.0",
+  "description": "A sample Node.js app using Express 4",
+  "engines": {
+    "node": "18.x"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "ts-node index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.7",
+    "pino": "^8.11.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.15.2",
+    "http-auth-utils": "^2.6.0",
+    "ts-node": "^10.9.1"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.2"
+  },
+  "keywords": [
+    "node",
+    "heroku",
+    "express"
+  ],
+  "license": "MIT"
+}
