@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import { config } from "dotenv";
 import { BASIC, buildAuthorizationHeader } from 'http-auth-utils'
 import dayjs from "dayjs";
@@ -28,7 +28,7 @@ let clockifySecret = process.env.CLOCKIFY_SECRET;
 let alignTo15Mins = process.env.ALIGN_TO_15_MINS === 'true';
 
 app
-    .post('/new-entry', async (req, res) => {
+    .post('/new-entry', async (req: Request, res: Response) => {
         try {
             log.debug({ ip: req.ip }, "New request");
             const {description, timeInterval: {duration, start}} = req.body as {
@@ -43,10 +43,10 @@ app
             }
 
             // find jira issue ID in the description
-            const issueID = description.match(/([A-Z0-9]+-\d+)/)[0];
+            const issueID = description.match(/([A-Z0-9]+-\d+)/)?.[0];
             if (!issueID) {
                 log.warn({description}, "No issue ID found in description")
-                res.status(200).send("No issue ID found in description");
+                return res.status(200).send("No issue ID found in description");
             }
 
             log.debug({query: req.query, body: req.body, headers: req.headers}, "Incoming Clockify request")
@@ -73,8 +73,6 @@ app
                 log.warn({issueID}, "No issue found for ID")
                 return res.status(200).send("No issue found for ID");
             }
-
-            const issueId: number = issue.id;
 
             log.info({id: issue.id, key: issue.key}, "Found issue");
 
