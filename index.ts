@@ -43,7 +43,7 @@ app
             }
 
             // find jira issue ID in the description
-            const issueID = description.match(/([A-Z0-9]+-\d+)/)?.[0];
+            const issueID = description.match(/([A-Z0-9]+-\d+)/i)?.[0];
             if (!issueID) {
                 log.warn({description}, "No issue ID found in description")
                 return res.status(200).send("No issue ID found in description");
