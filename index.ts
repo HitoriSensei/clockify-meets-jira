@@ -26,6 +26,42 @@ let jiraUsername = process.env.JIRA_USERNAME;
 let jiraToken = process.env.JIRA_TOKEN;
 let clockifySecret = process.env.CLOCKIFY_SECRET;
 let alignTo15Mins = process.env.ALIGN_TO_15_MINS === 'true';
+let overtimeMultiplier = parseFloat(process.env.OVERTIME_MULTIPLIER || '1.5');
+let overtimeToken = process.env.OVERTIME_TOKEN || '*'
+let overtimeThreshold = parseFloat(process.env.OVERTIME_THRESHOLD || '8');
+
+async function queueWorklogData(worklogData: {
+    visibility: null;
+    timeSpent: string;
+    comment: string;
+    started: string
+}, issue: { id: number; key: string }): Promise<boolean> {
+    log.debug({worklogData}, "Sending worklog data")
+
+    const update = await fetch(`${jiraURL}/rest/api/2/issue/${issue.key}/worklog?adjustEstimate=auto&_r=${Date.now()}`, {
+        "headers": {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': buildAuthorizationHeader(BASIC, {
+                username: jiraUsername,
+                password: jiraToken
+            })
+        },
+        "body": JSON.stringify(worklogData),
+        "method": "POST"
+    })
+
+    if (update.status !== 201) {
+        log.error({status: update.status, body: await update.text()}, "Could not update worklog");
+
+        // wait 5 seconds and try again
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        return await queueWorklogData(worklogData, issue);
+    }
+
+    log.info({key: issue.key, duration: worklogData.timeSpent, date: worklogData.started}, "Updated worklog");
+    return true
+}
 
 app
     .post('/new-entry', async (req: Request, res: Response) => {
@@ -78,52 +114,63 @@ app
 
             let dayJsDuration = dayjs.duration(duration);
 
-            let timespan = dayJsDuration.asMinutes();
+            let timespanInMinutes = dayJsDuration.asMinutes();
 
 
             if (alignTo15Mins) {
-                const original = timespan
-                timespan = Math.round(timespan / 15) * 15;
-                log.info({ original: original, rounded: timespan},"Rounded minutes to nearest 15 minutes");
+                const original = timespanInMinutes
+                timespanInMinutes = Math.round(timespanInMinutes / 15) * 15;
+                log.info({ original: original, rounded: timespanInMinutes},"Rounded minutes to nearest 15 minutes");
             }
 
-            if (timespan < 1) {
+            if (timespanInMinutes < 1) {
                 log.info("Timespan is less than 1 minute, ignoring", duration)
                 return res.status(200).send("Timespan is less than 1 minute");
+            }
+
+            // everything is OK, send 200 OK to Clockify and queue the worklog
+            res.status(200).send("OK");
+
+            const isOvertimeEntry = description.includes(overtimeToken);
+
+            // Handle overtime
+            let overtimeThresholdInMinutes = overtimeThreshold * 60;
+
+            if (isOvertimeEntry) {
+                log.info("Overtime entry detected, multiplying timespan by overtime multiplier")
+                timespanInMinutes = timespanInMinutes * overtimeMultiplier;
+            } else if (timespanInMinutes > overtimeThresholdInMinutes) {
+                // split into two worklogs, one for overtime and one for regular time
+                // save the overtime worklog first, then the regular worklog
+                let overtimeMinutesMultiplied = (timespanInMinutes - overtimeThresholdInMinutes) * overtimeMultiplier;
+
+                const overtimeWorklogData = {
+                    "comment": description.replace(issueID, "").trim() + " " + overtimeToken,
+                    "started": dayjs(start).add(dayjs.duration({hours: overtimeThreshold})).utc(false).toISOString().replace('Z', '+0000'),
+                    "timeSpent": `${overtimeMinutesMultiplied.toFixed(0)}m`,
+                    "visibility": null
+                }
+                log.debug({overtimeWorklogData}, "Overtime worklog data")
+
+                await queueWorklogData(overtimeWorklogData, issue);
+
+                timespanInMinutes = overtimeThresholdInMinutes;
             }
 
             const worklogData = {
                 "comment": description.replace(issueID, "").trim(),
                 "started": dayjs(start).utc(false).toISOString().replace('Z', '+0000'),
-                "timeSpent": `${timespan.toFixed(0)}m`,
+                "timeSpent": `${timespanInMinutes.toFixed(0)}m`,
                 "visibility": null
             };
-            log.debug({worklogData}, "Worklog data")
 
-            const update = await fetch(`${jiraURL}/rest/api/2/issue/${issue.key}/worklog?adjustEstimate=auto&_r=${Date.now()}`, {
-                "headers": {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'Authorization': buildAuthorizationHeader(BASIC, {
-                        username: jiraUsername,
-                        password: jiraToken
-                    })
-                },
-                "body": JSON.stringify(worklogData),
-                "method": "POST"
-            })
-
-            if (update.status !== 201) {
-                log.error({status: update.status, body: await update.text()}, "Could not update worklog");
-                return res.status(200).send("Could not update worklog");
-            }
-
-            log.info({key: issue.key, duration: worklogData.timeSpent, date: worklogData.started}, "Updated worklog");
-
-            return res.status(200).send("OK")
+            await queueWorklogData(worklogData, issue);
         } catch (error) {
             log.error({error}, "Caught error")
-            return res.status(500).send("Server error");
+            if(!res.headersSent) {
+                res.status(500).send("Server error");
+            }
+            return
         }
     })
     .listen(PORT, () => log.info(`Listening on ${PORT}`))
