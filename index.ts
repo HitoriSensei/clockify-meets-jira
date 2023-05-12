@@ -27,7 +27,7 @@ let jiraToken = process.env.JIRA_TOKEN;
 let clockifySecret = process.env.CLOCKIFY_SECRET;
 let alignTo15Mins = process.env.ALIGN_TO_15_MINS === 'true';
 let overtimeMultiplier = parseFloat(process.env.OVERTIME_MULTIPLIER || '1.5');
-let overtimeToken = process.env.OVERTIME_TOKEN || '*'
+let overtimeToken = process.env.OVERTIME_TOKEN || '[OT]'
 let overtimeThreshold = parseFloat(process.env.OVERTIME_THRESHOLD || '8');
 
 async function queueWorklogData(worklogData: {
