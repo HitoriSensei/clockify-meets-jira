@@ -139,7 +139,7 @@ app
             if (isOvertimeEntry) {
                 log.info("Overtime entry detected, multiplying timespan by overtime multiplier")
                 timespanInMinutes = timespanInMinutes * overtimeMultiplier;
-            } else if (timespanInMinutes > overtimeThresholdInMinutes) {
+            } else if (overtimeThresholdInMinutes > 0 && timespanInMinutes > overtimeThresholdInMinutes) {
                 // split into two worklogs, one for overtime and one for regular time
                 // save the overtime worklog first, then the regular worklog
                 let overtimeMinutesMultiplied = (timespanInMinutes - overtimeThresholdInMinutes) * overtimeMultiplier;
