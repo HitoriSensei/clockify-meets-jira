@@ -24,7 +24,8 @@ const log = pino({
 let jiraURL = process.env.JIRA_URL;
 let jiraUsername = process.env.JIRA_USERNAME;
 let jiraToken = process.env.JIRA_TOKEN;
-let clockifySecret = process.env.CLOCKIFY_SECRET;
+let authorizationSecret = process.env.AUTHORIZATION_SECRET;
+let authorizationHeader = process.env.AUTHORIZATION_HEADER;
 let alignTo15Mins = process.env.ALIGN_TO_15_MINS === 'true';
 let overtimeMultiplier = parseFloat(process.env.OVERTIME_MULTIPLIER || '1.5');
 let overtimeToken = process.env.OVERTIME_TOKEN || '[OT]'
@@ -66,16 +67,18 @@ async function queueWorklogData(worklogData: {
 app
     .post('/new-entry', async (req: Request, res: Response) => {
         try {
-            log.debug({ ip: req.ip }, "New request");
+            log.debug({ ip: req.ip, body: req.body, headers: req.headers }, "Incoming request")
             const {description, timeInterval: {duration, start}} = req.body as {
                 description: string,
                 timeInterval: { duration: string, start: string }
             };
 
-            const incomingSecret = req.headers['clockify-signature'] as string;
-            if (incomingSecret !== clockifySecret) {
-                log.error({incomingSecret}, "Clockify secrets do not match")
-                return res.status(400).send("Secrets do not match");
+            if(authorizationHeader && authorizationSecret) {
+                const incomingSecret = req.headers[authorizationHeader.toLowerCase()] as string;
+                if (incomingSecret !== authorizationSecret) {
+                    log.error({incomingSecret}, "Authorization secrets do not match")
+                    return res.status(401).send("Unauthorized");
+                }
             }
 
             // find jira issue ID in the description
