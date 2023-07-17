@@ -6,6 +6,7 @@ import duration from "dayjs/plugin/duration";
 import utc from "dayjs/plugin/utc";
 import pino from 'pino'
 import { parsePayload, PayloadType, WebhookPayload } from "./payload";
+import { inspect } from "util";
 
 dayjs.extend(utc)
 dayjs.extend(duration)
@@ -181,7 +182,7 @@ app
 
             await queueWorklogData(worklogData, issue);
         } catch (error) {
-            log.error({error}, "Caught error")
+            log.error({error: inspect(error)}, "Caught error")
             if(!res.headersSent) {
                 res.status(500).send("Server error");
             }
