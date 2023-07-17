@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
 import utc from "dayjs/plugin/utc";
 import pino from 'pino'
+import { parsePayload, PayloadType, WebhookPayload } from "./payload";
 
 dayjs.extend(utc)
 dayjs.extend(duration)
@@ -68,10 +69,18 @@ app
     .post('/new-entry', async (req: Request, res: Response) => {
         try {
             log.debug({ ip: req.ip, body: req.body, headers: req.headers }, "Incoming request")
-            const {description, timeInterval: {duration, start}} = req.body as {
-                description: string,
-                timeInterval: { duration: string, start: string }
-            };
+            const payload = req.body as WebhookPayload;
+
+            if (payload.payload == PayloadType.Ping) {
+                log.info("Ping received")
+                await fetch(payload.validation_code_url, {
+                    body: JSON.stringify({"validation_code": payload.validation_code}),
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                return res.status(200).send("Pong");
+            }
 
             if(authorizationHeader && authorizationSecret) {
                 const incomingSecret = req.headers[authorizationHeader.toLowerCase()] as string;
@@ -80,6 +89,9 @@ app
                     return res.status(401).send("Unauthorized");
                 }
             }
+
+            const commonPayload = parsePayload(payload);
+            const {description, timeInterval: {duration, start}} = commonPayload;
 
             // find jira issue ID in the description
             const issueID = description.match(/([A-Z0-9]+-\d+)/i)?.[0];
