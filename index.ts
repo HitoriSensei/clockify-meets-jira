@@ -75,6 +75,7 @@ app
             if (payload.payload == PayloadType.Ping) {
                 log.info("Ping received")
                 await fetch(payload.validation_code_url, {
+                    method: 'POST',
                     body: JSON.stringify({"validation_code": payload.validation_code}),
                     headers: {
                         'Content-Type': 'application/json'
