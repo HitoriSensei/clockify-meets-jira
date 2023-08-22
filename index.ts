@@ -83,7 +83,7 @@ app
 
             const ignoreReason = shouldIgnore(payload);
             if(ignoreReason) {
-                log.info({payload}, "Ignoring entry")
+                log.info({payload, ignoreReason}, "Ignoring entry")
                 return res.status(200);
             }
 
