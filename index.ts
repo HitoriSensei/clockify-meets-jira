@@ -68,6 +68,16 @@ async function queueWorklogData(worklogData: {
 
 app
     .post('/new-entry', async (req: Request, res: Response) => {
+        if(authorizationHeader && authorizationSecret) {
+            const incomingSecret = req.headers[authorizationHeader.toLowerCase()] as string;
+            if (incomingSecret !== authorizationSecret) {
+                log.error({incomingSecret}, "Authorization secrets do not match")
+                return res.status(401).send("Unauthorized");
+            }
+        }
+
+        res.status(200).send("Ok");
+
         try {
             log.debug({ ip: req.ip, body: req.body, headers: req.headers }, "Incoming request")
             const payload = req.body as WebhookPayload;
@@ -75,7 +85,6 @@ app
             if (isPing(payload)) {
                 log.info("Ping received")
 
-                res.status(200).send("Pong");
                 await fetch(payload.validation_code_url)
 
                 return
@@ -84,15 +93,7 @@ app
             const ignoreReason = shouldIgnore(payload);
             if(ignoreReason) {
                 log.info({payload, ignoreReason}, "Ignoring entry")
-                return res.status(200);
-            }
-
-            if(authorizationHeader && authorizationSecret) {
-                const incomingSecret = req.headers[authorizationHeader.toLowerCase()] as string;
-                if (incomingSecret !== authorizationSecret) {
-                    log.error({incomingSecret}, "Authorization secrets do not match")
-                    return res.status(401).send("Unauthorized");
-                }
+                return
             }
 
             const commonPayload = parsePayload(payload);
@@ -100,14 +101,14 @@ app
 
             if (!duration) {
                 log.info({description}, "No duration found in payload")
-                return res.status(200);
+                return
             }
 
             // find jira issue ID in the description
             const issueID = description.match(/([A-Z0-9]+-\d+)/i)?.[0];
             if (!issueID) {
                 log.warn({description}, "No issue ID found in description")
-                return res.status(200).send("No issue ID found in description");
+                return
             }
 
             log.debug({query: req.query, body: req.body, headers: req.headers}, "Incoming Clockify request")
@@ -132,7 +133,7 @@ app
             };
             if (!issue) {
                 log.warn({issueID}, "No issue found for ID")
-                return res.status(200).send("No issue found for ID");
+                return
             }
 
             log.info({id: issue.id, key: issue.key}, "Found issue");
@@ -149,7 +150,7 @@ app
 
             if (timespanInMinutes < 1) {
                 log.info("Timespan is less than 1 minute, ignoring", duration)
-                return res.status(200).send("Timespan is less than 1 minute");
+                return
             }
 
             const isOvertimeEntry = description.includes(overtimeToken);
@@ -181,7 +182,7 @@ app
             // if timespan is NaN, it means the duration was not in a valid format
             if (isNaN(timespanInMinutes)) {
                 log.error({parsed: commonPayload, incoming: payload}, "Could not parse duration")
-                return res.status(200).send("Could not parse duration");
+                return
             }
 
             const worklogData = {
@@ -192,14 +193,8 @@ app
             };
 
             await queueWorklogData(worklogData, issue);
-
-            res.status(200).send("OK");
         } catch (error) {
             log.error({error: inspect(error)}, "Caught error")
-            if(!res.headersSent) {
-                res.status(500).send("Server error");
-            }
-            return
         }
     })
     .listen(PORT, () => log.info(`Listening on ${PORT}`))
