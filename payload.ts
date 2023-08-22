@@ -34,7 +34,7 @@ export function isUpdated(payload: WebhookPayload): payload is UpdatedPayload {
 }
 
 export function isDeleted(payload: WebhookPayload): payload is UpdatedPayload {
-	return isUpdated(payload) && payload.metadata.request_body.includes('deleted_at');
+	return isUpdated(payload) && payload.metadata.request_body.includes('\\"deleted_at\\"');
 }
 
 export function shouldIgnore(payload: WebhookPayload): string | false {
