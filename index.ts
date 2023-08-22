@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
 import utc from "dayjs/plugin/utc";
 import pino from 'pino'
-import { parsePayload, PayloadType, WebhookPayload } from "./payload";
+import { isPing, parsePayload, WebhookPayload } from "./payload";
 import { inspect } from "util";
 
 dayjs.extend(utc)
@@ -66,13 +66,17 @@ async function queueWorklogData(worklogData: {
     return true
 }
 
+function shouldIgnore(description: string) {
+    return description.includes("!!")
+}
+
 app
     .post('/new-entry', async (req: Request, res: Response) => {
         try {
             log.debug({ ip: req.ip, body: req.body, headers: req.headers }, "Incoming request")
             const payload = req.body as WebhookPayload;
 
-            if (payload.payload == PayloadType.Ping) {
+            if (isPing(payload)) {
                 log.info("Ping received")
 
                 res.status(200).send("Pong");
@@ -91,6 +95,16 @@ app
 
             const commonPayload = parsePayload(payload);
             const {description, timeInterval: {duration, start}} = commonPayload;
+
+            if (!duration) {
+                log.info({description}, "No duration found in payload")
+                return res.status(200);
+            }
+
+            if(shouldIgnore(description)) {
+                log.info({description}, "Ignoring entry")
+                return res.status(200);
+            }
 
             // find jira issue ID in the description
             const issueID = description.match(/([A-Z0-9]+-\d+)/i)?.[0];
