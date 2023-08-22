@@ -1,7 +1,6 @@
 import { PingPayload } from "./payload/ping";
 import { CreatedPayload } from "./payload/created";
 
-
 export type WebhookPayload = PingPayload | CreatedPayload | UpdatedPayload;
 
 export function isPing(payload: WebhookPayload): payload is PingPayload {
@@ -12,7 +11,7 @@ export function isCreated(payload: WebhookPayload): payload is CreatedPayload {
 	return typeof payload.metadata === "object" && "action" in payload.metadata && payload.metadata.action === "created";
 }
 
-export interface CommonPayload {
+export type CommonPayload = {
 	description: string;
 	timeInterval: {
 		duration: string;
@@ -32,6 +31,18 @@ const noop: CommonPayload = {
 
 export function isUpdated(payload: WebhookPayload): payload is UpdatedPayload {
 	return typeof payload.metadata === "object" && "action" in payload.metadata && payload.metadata.action === "updated";
+}
+
+export function isDeleted(payload: WebhookPayload): payload is UpdatedPayload {
+	return isUpdated(payload) && payload.metadata.request_body.includes('deleted_at');
+}
+
+export function shouldIgnore(payload: WebhookPayload): string | false {
+	return (isPing(payload) && "Ping received")
+		|| (isCreated(payload) && !payload.payload.stop && "Created entry without stop time")
+		|| (isUpdated(payload) && !payload.payload.stop && "Updated entry without stop time")
+		|| (isDeleted(payload) && "Deleted entry")
+		|| false;
 }
 
 export function parsePayload(payload: WebhookPayload): CommonPayload {

@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
 import utc from "dayjs/plugin/utc";
 import pino from 'pino'
-import { isPing, parsePayload, WebhookPayload } from "./payload";
+import { isPing, parsePayload, shouldIgnore, WebhookPayload } from "./payload";
 import { inspect } from "util";
 
 dayjs.extend(utc)
@@ -15,7 +15,7 @@ config()
 
 const PORT = process.env.PORT
 
-let app = express();
+const app = express();
 
 app.use(express.json());
 
@@ -23,15 +23,15 @@ const log = pino({
     level: process.env.LOG_LEVEL || 'info',
 })
 
-let jiraURL = process.env.JIRA_URL;
-let jiraUsername = process.env.JIRA_USERNAME;
-let jiraToken = process.env.JIRA_TOKEN;
-let authorizationSecret = process.env.AUTHORIZATION_SECRET;
-let authorizationHeader = process.env.AUTHORIZATION_HEADER;
-let alignTo15Mins = process.env.ALIGN_TO_15_MINS === 'true';
-let overtimeMultiplier = parseFloat(process.env.OVERTIME_MULTIPLIER || '1.5');
-let overtimeToken = process.env.OVERTIME_TOKEN || '[OT]'
-let overtimeThreshold = parseFloat(process.env.OVERTIME_THRESHOLD || '8');
+const jiraURL = process.env.JIRA_URL;
+const jiraUsername = process.env.JIRA_USERNAME;
+const jiraToken = process.env.JIRA_TOKEN;
+const authorizationSecret = process.env.AUTHORIZATION_SECRET;
+const authorizationHeader = process.env.AUTHORIZATION_HEADER;
+const alignTo15Mins = process.env.ALIGN_TO_15_MINS === 'true';
+const overtimeMultiplier = parseFloat(process.env.OVERTIME_MULTIPLIER || '1.5');
+const overtimeToken = process.env.OVERTIME_TOKEN || '[OT]'
+const overtimeThreshold = parseFloat(process.env.OVERTIME_THRESHOLD || '8');
 
 async function queueWorklogData(worklogData: {
     visibility: null;
@@ -66,10 +66,6 @@ async function queueWorklogData(worklogData: {
     return true
 }
 
-function shouldIgnore(description: string) {
-    return description.includes("!!")
-}
-
 app
     .post('/new-entry', async (req: Request, res: Response) => {
         try {
@@ -85,6 +81,12 @@ app
                 return
             }
 
+            const ignoreReason = shouldIgnore(payload);
+            if(ignoreReason) {
+                log.info({payload}, "Ignoring entry")
+                return res.status(200);
+            }
+
             if(authorizationHeader && authorizationSecret) {
                 const incomingSecret = req.headers[authorizationHeader.toLowerCase()] as string;
                 if (incomingSecret !== authorizationSecret) {
@@ -98,11 +100,6 @@ app
 
             if (!duration) {
                 log.info({description}, "No duration found in payload")
-                return res.status(200);
-            }
-
-            if(shouldIgnore(description)) {
-                log.info({description}, "Ignoring entry")
                 return res.status(200);
             }
 
@@ -140,10 +137,9 @@ app
 
             log.info({id: issue.id, key: issue.key}, "Found issue");
 
-            let dayJsDuration = dayjs.duration(duration);
+            const dayJsDuration = dayjs.duration(duration);
 
             let timespanInMinutes = dayJsDuration.asMinutes();
-
 
             if (alignTo15Mins) {
                 const original = timespanInMinutes
@@ -159,7 +155,7 @@ app
             const isOvertimeEntry = description.includes(overtimeToken);
 
             // Handle overtime
-            let overtimeThresholdInMinutes = overtimeThreshold * 60;
+            const overtimeThresholdInMinutes = overtimeThreshold * 60;
 
             if (isOvertimeEntry) {
                 log.info("Overtime entry detected, multiplying timespan by overtime multiplier")
@@ -167,7 +163,7 @@ app
             } else if (overtimeThresholdInMinutes > 0 && timespanInMinutes > overtimeThresholdInMinutes) {
                 // split into two worklogs, one for overtime and one for regular time
                 // save the overtime worklog first, then the regular worklog
-                let overtimeMinutesMultiplied = (timespanInMinutes - overtimeThresholdInMinutes) * overtimeMultiplier;
+                const overtimeMinutesMultiplied = (timespanInMinutes - overtimeThresholdInMinutes) * overtimeMultiplier;
 
                 const overtimeWorklogData = {
                     "comment": description.replace(issueID, "").trim() + " " + overtimeToken,
