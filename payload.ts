@@ -43,7 +43,7 @@ export function parsePayload(payload: WebhookPayload): CommonPayload {
 		return {
 			description: payload.payload.description,
 			timeInterval: {
-				duration: payload.payload.duration.toString(),
+				duration: `PT${payload.payload.duration.toString()}S`,
 				start: payload.payload.start,
 				end: payload.payload.stop
 			}

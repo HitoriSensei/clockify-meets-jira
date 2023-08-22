@@ -39,7 +39,7 @@ async function queueWorklogData(worklogData: {
     comment: string;
     started: string
 }, issue: { id: number; key: string }): Promise<boolean> {
-    log.debug({worklogData}, "Sending worklog data")
+    log.info({worklogData}, "Sending worklog data")
 
     const update = await fetch(`${jiraURL}/rest/api/2/issue/${issue.key}/worklog?adjustEstimate=auto&_r=${Date.now()}`, {
         "headers": {
@@ -156,9 +156,6 @@ app
                 return res.status(200).send("Timespan is less than 1 minute");
             }
 
-            // everything is OK, send 200 OK to Clockify and queue the worklog
-            res.status(200).send("OK");
-
             const isOvertimeEntry = description.includes(overtimeToken);
 
             // Handle overtime
@@ -185,6 +182,12 @@ app
                 timespanInMinutes = overtimeThresholdInMinutes;
             }
 
+            // if timespan is NaN, it means the duration was not in a valid format
+            if (isNaN(timespanInMinutes)) {
+                log.error({parsed: commonPayload, incoming: payload}, "Could not parse duration")
+                return res.status(200).send("Could not parse duration");
+            }
+
             const worklogData = {
                 "comment": description.replace(issueID, "").trim(),
                 "started": dayjs(start).utc(false).toISOString().replace('Z', '+0000'),
@@ -193,6 +196,8 @@ app
             };
 
             await queueWorklogData(worklogData, issue);
+
+            res.status(200).send("OK");
         } catch (error) {
             log.error({error: inspect(error)}, "Caught error")
             if(!res.headersSent) {
