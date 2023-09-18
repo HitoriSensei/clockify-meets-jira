@@ -77,7 +77,10 @@ async function processRequest(req: express.Request) {
         if (isPing(payload)) {
             log.info("Ping received")
 
-            await fetch(payload.validation_code_url)
+            if(payload.validation_code_url) {
+                log.info("Sending validation code")
+                await fetch(payload.validation_code_url)
+            }
 
             return
         }
