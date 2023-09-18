@@ -1,5 +1,3 @@
-
-
 /**
  * {
  * 	"event_id": 8023169274704072,
@@ -43,44 +41,44 @@
  */
 
 export interface CreatedPayload {
-    event_id: number
-    created_at: string
-    creator_id: number
-    metadata: Metadata
-    payload: Payload
-    subscription_id: number
-    timestamp: string
-    url_callback: string
+  event_id: number;
+  created_at: string;
+  creator_id: number;
+  metadata: Metadata;
+  payload: Payload;
+  subscription_id: number;
+  timestamp: string;
+  url_callback: string;
 }
 
 export interface Metadata {
-    action: string
-    event_user_id: string
-    model: string
-    model_owner_id: string
-    path: string
-    request_body: string
-    request_type: string
-    time_entry_id: string
-    workspace_id: string
+  action: string;
+  event_user_id: string;
+  model: string;
+  model_owner_id: string;
+  path: string;
+  request_body: string;
+  request_type: string;
+  time_entry_id: string;
+  workspace_id: string;
 }
 
 export interface Payload {
-    at: string
-    billable: boolean
-    description: string
-    duration: number
-    duronly: boolean
-    id: number
-    project_id: any
-    server_deleted_at: any
-    start: string
-    stop: any
-    tag_ids: any
-    tags: any[]
-    task_id: any
-    uid: number
-    user_id: number
-    wid: number
-    workspace_id: number
+  at: string;
+  billable: boolean;
+  description: string;
+  duration: number;
+  duronly: boolean;
+  id: number;
+  project_id?: string;
+  server_deleted_at?: string;
+  start: string;
+  stop?: string;
+  tag_ids?: string;
+  tags?: string[];
+  task_id?: string;
+  uid: number;
+  user_id: number;
+  wid: number;
+  workspace_id: number;
 }

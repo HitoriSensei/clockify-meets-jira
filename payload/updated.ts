@@ -37,41 +37,41 @@
 //     "url_callback": "https://dark-red-mussel-hose.cyclic.app/new-entry"
 // }
 
-interface UpdatedPayload {
-    event_id: number;
-    created_at: string;
-    creator_id: number;
-    metadata: {
-        action: "updated";
-        event_user_id: string;
-        model: "time_entry";
-        model_owner_id: string;
-        path: string;
-        request_body: string;
-        request_type: string;
-        time_entry_id: string;
-        workspace_id: string;
-    };
-    payload: {
-        at: string;
-        billable: boolean;
-        description: string;
-        duration: number;
-        duronly: boolean;
-        id: number;
-        project_id: null;
-        server_deleted_at: null;
-        start: string;
-        stop: string;
-        tag_ids: null;
-        tags: any[];
-        task_id: null;
-        uid: number;
-        user_id: number;
-        wid: number;
-        workspace_id: number;
-    };
-    subscription_id: number;
-    timestamp: string;
-    url_callback: string;
+export interface UpdatedPayload {
+  event_id: number;
+  created_at: string;
+  creator_id: number;
+  metadata: {
+    action: "updated";
+    event_user_id: string;
+    model: "time_entry";
+    model_owner_id: string;
+    path: string;
+    request_body: string;
+    request_type: string;
+    time_entry_id: string;
+    workspace_id: string;
+  };
+  payload: {
+    at: string;
+    billable: boolean;
+    description: string;
+    duration: number;
+    duronly: boolean;
+    id: number;
+    project_id: null;
+    server_deleted_at: null;
+    start: string;
+    stop: string;
+    tag_ids: null;
+    tags?: string[];
+    task_id: null;
+    uid: number;
+    user_id: number;
+    wid: number;
+    workspace_id: number;
+  };
+  subscription_id: number;
+  timestamp: string;
+  url_callback: string;
 }

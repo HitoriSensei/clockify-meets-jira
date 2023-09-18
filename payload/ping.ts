@@ -18,19 +18,19 @@
  */
 
 export interface PingPayload {
-    event_id: number
-    created_at: string
-    creator_id: number
-    metadata: Metadata
-    payload: string
-    subscription_id: number
-    timestamp: string
-    url_callback: string
-    validation_code: string
-    validation_code_url: string
+  event_id: number;
+  created_at: string;
+  creator_id: number;
+  metadata: Metadata;
+  payload: string;
+  subscription_id: number;
+  timestamp: string;
+  url_callback: string;
+  validation_code: string;
+  validation_code_url: string;
 }
 
 export interface Metadata {
-    request_type: string
-    event_user_id: number
+  request_type: string;
+  event_user_id: number;
 }
