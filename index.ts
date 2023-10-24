@@ -85,7 +85,7 @@ async function queueWorkLogData(workLogData: WorkLogData): Promise<boolean> {
       .trim();
   } else {
     // if no targets are set, call all targets
-    targets = Object.values(targets);
+    targets = Object.values(availableTargets);
   }
 
   log.info(`Publishing to ${targets.length} targets`);
