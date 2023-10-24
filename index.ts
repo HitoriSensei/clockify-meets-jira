@@ -52,8 +52,8 @@ async function queueTarget(
     async () => {
       await target(workLogData);
     },
-    WithMaxRetries(5),
-    WithDelayDuration(1000),
+    WithMaxRetries(10),
+    WithDelayDuration(100),
     WithDelayStrategy(LinearDelayStrategy),
     WithOnError((error) => {
       if (error instanceof AbortException) {
@@ -90,11 +90,13 @@ async function queueWorkLogData(workLogData: WorkLogData): Promise<boolean> {
     targets = Object.values(targets);
   }
 
-  for (const target of targets) {
-    queueTarget(target, workLogData).catch((err) => {
-      log.error({ err, target }, "Error sending workLog data to target");
-    });
-  }
+  await Promise.all(
+    targets.map((target) =>
+      queueTarget(target, workLogData).catch((err) => {
+        log.error({ err, target }, "Error sending workLog data to target");
+      })
+    )
+  );
 
   return true;
 }
