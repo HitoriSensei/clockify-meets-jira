@@ -45,10 +45,15 @@ async function queueWorklogData(
 ): Promise<boolean> {
   log.info({ worklogData }, "Sending worklog data");
 
-  const update = await fetch(
-    `${jiraURL}/rest/api/2/issue/${
+  let url = `${jiraURL}/rest/api/2/issue/${
       issue.key
-    }/worklog?adjustEstimate=auto&_r=${Date.now()}`,
+  }/worklog?adjustEstimate=auto&_r=${Date.now()}`;
+
+  log.info({ url }, "Sending worklog data");
+  log.info({ worklogData }, "Sending worklog data");
+
+  const update = await fetch(
+    url,
     {
       headers: {
         "Content-Type": "application/json",
