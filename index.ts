@@ -49,9 +49,7 @@ async function queueTarget(
   workLogData: WorkLogData
 ): Promise<void> {
   await Repeat(
-    async () => {
-      await target(workLogData);
-    },
+    () => target(workLogData),
     WithMaxRetries(10),
     WithDelayDuration(100),
     WithDelayStrategy(LinearDelayStrategy),
@@ -90,12 +88,17 @@ async function queueWorkLogData(workLogData: WorkLogData): Promise<boolean> {
     targets = Object.values(targets);
   }
 
+  log.info(`Publishing to ${targets.length} targets`);
+
   await Promise.all(
-    targets.map((target) =>
-      queueTarget(target, workLogData).catch((err) => {
+    targets.map(async (target) => {
+      log.info({ target }, "Sending workLog data to target");
+      try {
+        return await queueTarget(target, workLogData);
+      } catch (err) {
         log.error({ err, target }, "Error sending workLog data to target");
-      })
-    )
+      }
+    })
   );
 
   return true;
