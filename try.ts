@@ -17,7 +17,6 @@ interface TryForOptions {
   timeout: number;
   delayDuration: number;
   delayStrategy: DelayStrategy;
-  cancel?: any;
   abortOnSameError: boolean;
   onError?: (error: unknown) => Action | void;
 }
@@ -97,6 +96,7 @@ export const Repeat = async <T>(
   const startTime = Date.now();
   let previousError: unknown;
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (retryCount > 0 && retryDuration > 0) {
       await new Promise((resolve) => setTimeout(resolve, retryDuration));
