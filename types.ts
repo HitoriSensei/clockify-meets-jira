@@ -6,3 +6,10 @@ export interface CommonPayload {
     start: string;
   };
 }
+
+export interface WorkLogData {
+  visibility: null;
+  timeSpent: string;
+  description: string;
+  started: string;
+}

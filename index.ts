@@ -1,12 +1,24 @@
 import express, { Request, Response } from "express";
 import { config } from "dotenv";
-import { BASIC, buildAuthorizationHeader } from "http-auth-utils";
 import dayjs from "dayjs";
 import duration from "dayjs/plugin/duration";
 import utc from "dayjs/plugin/utc";
-import pino from "pino";
 import { isPing, parsePayload, shouldIgnore, WebhookPayload } from "./payload";
 import { inspect } from "util";
+import { WorkLogData } from "./types";
+import { log } from "./log";
+
+import * as jira from "./targets/jira";
+import {
+  Action,
+  LinearDelayStrategy,
+  Repeat,
+  WithDelayDuration,
+  WithDelayStrategy,
+  WithMaxRetries,
+  WithOnError,
+} from "./try";
+import { AbortException } from "./exceptions";
 
 dayjs.extend(utc);
 dayjs.extend(duration);
@@ -19,13 +31,6 @@ const app = express();
 
 app.use(express.json());
 
-const log = pino({
-  level: process.env.LOG_LEVEL || "info",
-});
-
-const jiraURL = process.env.JIRA_URL;
-const jiraUsername = process.env.JIRA_USERNAME;
-const jiraToken = process.env.JIRA_TOKEN;
 const authorizationSecret = process.env.AUTHORIZATION_SECRET;
 const authorizationHeader = process.env.AUTHORIZATION_HEADER;
 const alignTo15Mins = process.env.ALIGN_TO_15_MINS === "true";
@@ -33,83 +38,65 @@ const overtimeMultiplier = parseFloat(process.env.OVERTIME_MULTIPLIER || "1.5");
 const overtimeToken = process.env.OVERTIME_TOKEN || "[OT]";
 const overtimeThreshold = parseFloat(process.env.OVERTIME_THRESHOLD || "8");
 
-async function queueWorklogData(
-  worklogData: {
-    visibility: null;
-    timeSpent: string;
-    comment: string;
-    started: string;
-  },
-  issue: { id: number; key: string },
-  count = 0
-): Promise<boolean> {
-  log.info({ worklogData }, "Sending worklog data");
+const availableTargets = {
+  jira: jira.publish,
+} as const;
 
-  const update = await fetch(
-    `${jiraURL}/rest/api/2/issue/${
-      issue.key
-    }/worklog?adjustEstimate=auto&_r=${Date.now()}`,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: buildAuthorizationHeader(BASIC, {
-          username: jiraUsername,
-          password: jiraToken,
-        }),
-      },
-      body: JSON.stringify(worklogData),
-      method: "POST",
-    }
-  );
+type TargetPublishFunction = (workLogData: WorkLogData) => Promise<void>;
 
-  if (update.status !== 201) {
-    log.error(
-      { status: update.status, body: await update.text() },
-      "Could not update worklog"
-    );
-
-    if (count < 5) {
-      // wait 1 seconds and try again
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      return await queueWorklogData(worklogData, issue, count + 1);
-    } else {
-      throw new Error(
-        `Could not update worklog: returned status ${update.status}`
-      );
-    }
-  }
-
-  log.info(
-    {
-      key: issue.key,
-      duration: worklogData.timeSpent,
-      date: worklogData.started,
+async function queueTarget(
+  target: TargetPublishFunction,
+  workLogData: WorkLogData
+): Promise<void> {
+  await Repeat(
+    async () => {
+      await target(workLogData);
     },
-    "Updated worklog"
+    WithMaxRetries(5),
+    WithDelayDuration(1000),
+    WithDelayStrategy(LinearDelayStrategy),
+    WithOnError((error) => {
+      if (error instanceof AbortException) {
+        return Action.Abort;
+      }
+    })
   );
-  return true;
 }
 
-function retry<T>(
-  generator: (count: number) => Promise<T>,
-  amount: number,
-  delay: number
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const run = (count: number) => {
-      generator(count)
-        .then(resolve)
-        .catch((err) => {
-          if (count < amount) {
-            setTimeout(() => run(count + 1), delay);
-          } else {
-            reject(err);
-          }
-        });
-    };
-    run(0);
-  });
+async function queueWorkLogData(workLogData: WorkLogData): Promise<boolean> {
+  log.info({ workLogData }, "Sending workLog data");
+
+  let targets: TargetPublishFunction[] = [];
+  // check if targets are explicitly set in description.
+  // format: {target1,target2,target3}
+  const targetsInDescription = workLogData.description.match(/{(.*)}/)?.[1];
+  if (targetsInDescription) {
+    const targetsToCall = targetsInDescription.split(",");
+    for (const target of targetsToCall) {
+      const cleanTarget = target.trim() as keyof typeof availableTargets;
+      if (cleanTarget in availableTargets) {
+        targets.push(availableTargets[cleanTarget]);
+      } else {
+        log.warn({ target: cleanTarget }, "Target not found");
+      }
+    }
+
+    // remove targets from description
+    workLogData.description = workLogData.description
+      .replace(/{(.*)}/, "")
+      .trim();
+  } else {
+    // if no targets are set, call all targets
+    targets = Object.values(targets);
+  }
+
+  for (const target of targets) {
+    queueTarget(target, workLogData).catch((err) => {
+      log.error({ err, target }, "Error sending workLog data to target");
+    });
+  }
+
+  return true;
 }
 
 async function processRequest(req: express.Request) {
@@ -143,14 +130,7 @@ async function processRequest(req: express.Request) {
   } = commonPayload;
 
   if (!duration) {
-    log.info({ description }, "No duration found in payload");
-    return;
-  }
-
-  // find jira issue ID in the description
-  const issueID = description.match(/([A-Z0-9]+-\d+)/i)?.[0];
-  if (!issueID) {
-    log.warn({ description }, "No issue ID found in description");
+    log.info(payload, "No duration found in payload");
     return;
   }
 
@@ -158,41 +138,6 @@ async function processRequest(req: express.Request) {
     { query: req.query, body: req.body, headers: req.headers },
     "Incoming Clockify request"
   );
-
-  const issues = await retry(
-    async (): Promise<{ issues: { id: number }[] }> =>
-      await fetch(
-        jiraURL +
-          "/rest/api/2/search?jql=" +
-          encodeURIComponent(`id=${issueID}`),
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            Authorization: buildAuthorizationHeader(BASIC, {
-              username: jiraUsername,
-              password: jiraToken,
-            }),
-          },
-        }
-      ).then((res) => res.json()),
-    5,
-    1000
-  ).catch((err) => {
-    log.error({ err }, "Error fetching issues");
-    return { issues: [] };
-  });
-
-  const issue = issues.issues[0] as {
-    id: number;
-    key: string;
-  };
-  if (!issue) {
-    log.warn({ issueID }, "No issue found for ID");
-    return;
-  }
-
-  log.info({ id: issue.id, key: issue.key }, "Found issue");
 
   const dayJsDuration = dayjs.duration(duration);
 
@@ -226,13 +171,13 @@ async function processRequest(req: express.Request) {
     overtimeThresholdInMinutes > 0 &&
     timespanInMinutes > overtimeThresholdInMinutes
   ) {
-    // split into two worklogs, one for overtime and one for regular time
-    // save the overtime worklog first, then the regular worklog
+    // split into two workLogs, one for overtime and one for regular time
+    // save the overtime workLog first, then the regular workLog
     const overtimeMinutesMultiplied =
       (timespanInMinutes - overtimeThresholdInMinutes) * overtimeMultiplier;
 
-    const overtimeWorklogData = {
-      comment: description.replace(issueID, "").trim() + " " + overtimeToken,
+    const overtimeWorkLogData = {
+      description: description.trim() + " " + overtimeToken,
       started: dayjs(start)
         .add(dayjs.duration({ hours: overtimeThreshold }))
         .utc(false)
@@ -241,9 +186,9 @@ async function processRequest(req: express.Request) {
       timeSpent: `${overtimeMinutesMultiplied.toFixed(0)}m`,
       visibility: null,
     };
-    log.debug({ overtimeWorklogData }, "Overtime worklog data");
+    log.debug({ overtimeWorkLogData }, "Overtime workLog data");
 
-    await queueWorklogData(overtimeWorklogData, issue);
+    await queueWorkLogData(overtimeWorkLogData);
 
     timespanInMinutes = overtimeThresholdInMinutes;
   }
@@ -257,14 +202,14 @@ async function processRequest(req: express.Request) {
     return;
   }
 
-  const worklogData = {
-    comment: description.replace(issueID, "").trim(),
+  const workLogData = {
+    description: description.trim(),
     started: dayjs(start).utc(false).toISOString().replace("Z", "+0000"),
     timeSpent: `${timespanInMinutes.toFixed(0)}m`,
     visibility: null,
   };
 
-  await queueWorklogData(worklogData, issue);
+  await queueWorkLogData(workLogData);
 }
 
 app
