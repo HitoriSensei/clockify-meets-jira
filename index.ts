@@ -185,9 +185,7 @@ async function processRequest(req: express.Request) {
       description: description.trim() + " " + overtimeToken,
       started: dayjs(start)
         .add(dayjs.duration({ hours: overtimeThreshold }))
-        .utc(false)
-        .toISOString()
-        .replace("Z", "+0000"),
+        .utc(false),
       timeSpentInMinutes: overtimeMinutesMultiplied,
       visibility: null,
     };
@@ -209,7 +207,7 @@ async function processRequest(req: express.Request) {
 
   const workLogData: WorkLogData = {
     description: description.trim(),
-    started: dayjs(start).utc(false).toISOString().replace("Z", "+0000"),
+    started: dayjs(start).utc(false),
     timeSpentInMinutes: timespanInMinutes,
     visibility: null,
   };

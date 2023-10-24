@@ -1,3 +1,5 @@
+import dayjs from "dayjs";
+
 export interface CommonPayload {
   // {description, timeInterval: {duration, start}}
   description: string;
@@ -11,5 +13,5 @@ export interface WorkLogData {
   visibility: null;
   timeSpentInMinutes: number;
   description: string;
-  started: string;
+  started: dayjs.Dayjs;
 }

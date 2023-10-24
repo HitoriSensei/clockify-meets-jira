@@ -21,10 +21,8 @@ export async function publish(workLogData: WorkLogData): Promise<void> {
     throw new AbortException("Jira not configured");
   }
 
-  const description = workLogData.description;
-
   // find jira issue ID in the description
-  const issueID = description.match(/([A-Z0-9]+-\d+)/i)?.[0];
+  const issueID = workLogData.description.match(/([A-Z0-9]+-\d+)/i)?.[0];
   if (!issueID) {
     throw new AbortException("No issue ID found in description");
   }
@@ -63,26 +61,29 @@ export async function publish(workLogData: WorkLogData): Promise<void> {
     visibility: null,
     timeSpent: `${workLogData.timeSpentInMinutes.toFixed(0)}m`,
     comment: workLogData.description.replace(issue.key, "").trim(),
-    started: workLogData.started,
+    started: workLogData.started.toISOString().replace("Z", "+0000"),
   };
 
-  const update = await fetch(
-    `${jiraURL}/rest/api/2/issue/${
-      issue.key
-    }/workLog?adjustEstimate=auto&_r=${Date.now()}`,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: buildAuthorizationHeader(BASIC, {
-          username: jiraUsername,
-          password: jiraToken,
-        }),
-      },
-      body: JSON.stringify(jiraWorkLogData),
-      method: "POST",
-    }
-  );
+  log.debug({ jiraWorkLogData }, "Jira workLog data");
+
+  const url = `${jiraURL}/rest/api/2/issue/${
+    issue.key
+  }/workLog?adjustEstimate=auto&_r=${Date.now()}`;
+
+  log.debug({ url }, "Jira workLog url");
+
+  const update = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: buildAuthorizationHeader(BASIC, {
+        username: jiraUsername,
+        password: jiraToken,
+      }),
+    },
+    body: JSON.stringify(jiraWorkLogData),
+    method: "POST",
+  });
 
   if (update.status !== 201) {
     log.error(
