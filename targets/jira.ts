@@ -68,7 +68,7 @@ export async function publish(workLogData: WorkLogData): Promise<void> {
 
   const url = `${jiraURL}/rest/api/2/issue/${
     issue.key
-  }/workLog?adjustEstimate=auto&_r=${Date.now()}`;
+  }/worklog?adjustEstimate=auto&_r=${Date.now()}`;
 
   log.debug({ url }, "Jira workLog url");
 
