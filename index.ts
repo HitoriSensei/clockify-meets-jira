@@ -181,14 +181,14 @@ async function processRequest(req: express.Request) {
     const overtimeMinutesMultiplied =
       (timespanInMinutes - overtimeThresholdInMinutes) * overtimeMultiplier;
 
-    const overtimeWorkLogData = {
+    const overtimeWorkLogData: WorkLogData = {
       description: description.trim() + " " + overtimeToken,
       started: dayjs(start)
         .add(dayjs.duration({ hours: overtimeThreshold }))
         .utc(false)
         .toISOString()
         .replace("Z", "+0000"),
-      timeSpent: `${overtimeMinutesMultiplied.toFixed(0)}m`,
+      timeSpentInMinutes: overtimeMinutesMultiplied,
       visibility: null,
     };
     log.debug({ overtimeWorkLogData }, "Overtime workLog data");
@@ -207,10 +207,10 @@ async function processRequest(req: express.Request) {
     return;
   }
 
-  const workLogData = {
+  const workLogData: WorkLogData = {
     description: description.trim(),
     started: dayjs(start).utc(false).toISOString().replace("Z", "+0000"),
-    timeSpent: `${timespanInMinutes.toFixed(0)}m`,
+    timeSpentInMinutes: timespanInMinutes,
     visibility: null,
   };
 

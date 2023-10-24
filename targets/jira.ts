@@ -9,6 +9,13 @@ const jiraToken = process.env.JIRA_TOKEN;
 
 const log = rootLog.child({ target: "jira" });
 
+type JiraWorkLogData = {
+  visibility: null;
+  timeSpent: string;
+  comment: string;
+  started: string;
+};
+
 export async function publish(workLogData: WorkLogData): Promise<void> {
   if (!jiraURL || !jiraUsername || !jiraToken) {
     throw new AbortException("Jira not configured");
@@ -47,10 +54,17 @@ export async function publish(workLogData: WorkLogData): Promise<void> {
   const issue = issues.issues?.[0];
 
   if (!issue) {
-    throw new Error(`Could not find issue with ID ${issueID}`);
+    throw new AbortException(`Could not find issue with ID ${issueID}`);
   }
 
   log.info({ id: issue.id, key: issue.key }, "Found issue");
+
+  const jiraWorkLogData: JiraWorkLogData = {
+    visibility: null,
+    timeSpent: `${workLogData.timeSpentInMinutes.toFixed(0)}m`,
+    comment: workLogData.description.replace(issue.key, "").trim(),
+    started: workLogData.started,
+  };
 
   const update = await fetch(
     `${jiraURL}/rest/api/2/issue/${
@@ -65,7 +79,7 @@ export async function publish(workLogData: WorkLogData): Promise<void> {
           password: jiraToken,
         }),
       },
-      body: JSON.stringify(workLogData),
+      body: JSON.stringify(jiraWorkLogData),
       method: "POST",
     }
   );
@@ -82,7 +96,7 @@ export async function publish(workLogData: WorkLogData): Promise<void> {
   log.info(
     {
       key: issue.key,
-      duration: workLogData.timeSpent,
+      duration: workLogData.timeSpentInMinutes,
       date: workLogData.started,
     },
     "Updated workLog"

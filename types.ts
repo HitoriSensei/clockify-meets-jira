@@ -9,7 +9,7 @@ export interface CommonPayload {
 
 export interface WorkLogData {
   visibility: null;
-  timeSpent: string;
+  timeSpentInMinutes: number;
   description: string;
   started: string;
 }
